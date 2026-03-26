@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能财务研发部 - 文化墙</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <canvas id="particles"></canvas>
+    
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <span class="dept-name">智能财务研发部</span>
+                <span class="year-month" id="currentYearMonth"></span>
+            </h1>
+            <p class="subtitle">文化墙 · 记录每一个精彩瞬间</p>
+        </header>
+
+        <div class="view-toggle">
+            <button class="btn btn-monthly active" id="btnMonthly">
+                <span class="icon">📅</span>
+                <span>按月份查看</span>
+            </button>
+            <button class="btn btn-overview" id="btnOverview">
+                <span class="icon">📊</span>
+                <span>全部月份</span>
+            </button>
+        </div>
+
+        <section class="section-month-selector" id="monthSelector">
+            <div class="month-grid">
+                <button class="month-btn" data-month="1">1月</button>
+                <button class="month-btn" data-month="2">2月</button>
+                <button class="month-btn active" data-month="3">3月</button>
+                <button class="month-btn" data-month="4">4月</button>
+                <button class="month-btn" data-month="5">5月</button>
+                <button class="month-btn" data-month="6">6月</button>
+                <button class="month-btn" data-month="7">7月</button>
+                <button class="month-btn" data-month="8">8月</button>
+                <button class="month-btn" data-month="9">9月</button>
+                <button class="month-btn" data-month="10">10月</button>
+                <button class="month-btn" data-month="11">11月</button>
+                <button class="month-btn" data-month="12">12月</button>
+            </div>
+        </section>
+
+        <section class="section-story" id="sectionStory">
+            <div class="story-card">
+                <div class="story-header">
+                    <h2 class="story-title" id="storyTitle">春暖花开</h2>
+                    <button class="btn-icon" id="btnEditStory" title="编辑故事">✏️</button>
+                </div>
+                <p class="story-content" id="storyContent">阳春三月，部门组织户外拓展活动，增强团队凝聚力与协作能力。</p>
+            </div>
+        </section>
+
+        <section class="section-employees" id="sectionEmployees">
+            <div class="employees-header">
+                <h2 class="section-title">
+                    <span class="icon">👥</span>
+                    <span id="employeesTitle">本月优秀员工</span>
+                </h2>
+                <button class="btn btn-add" id="btnAddEmployee">
+                    <span class="icon">+</span>
+                    <span>添加员工</span>
+                </button>
+            </div>
+            
+            <div class="employees-grid" id="employeesGrid">
+            </div>
+        </section>
+
+        <section class="section-all-months" id="sectionAllMonths" style="display: none;">
+            <div class="all-months-header">
+                <h2 class="section-title">
+                    <span class="icon">📋</span>
+                    <span>全部月份员工一览</span>
+                </h2>
+                <button class="btn btn-secondary" id="btnFilterMonth">
+                    <span class="icon">🔍</span>
+                    <span id="filterText">筛选全部月份</span>
+                </button>
+            </div>
+            <div id="allMonthsContent"></div>
+        </section>
+    </div>
+
+    <div class="modal" id="modalAddEmployee">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加员工</h3>
+                <button class="btn-close" id="btnCloseModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="inputName">姓名</label>
+                    <input type="text" id="inputName" placeholder="请输入员工姓名" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label for="inputPhoto">头像图片</label>
+                    <div class="photo-upload" id="photoUpload">
+                        <div class="photo-placeholder" id="photoPlaceholder">
+                            <span class="icon">📷</span>
+                            <span>点击上传图片</span>
+                            <span class="hint">命名格式: 202603-张三.jpg</span>
+                        </div>
+                        <img id="photoPreview" style="display: none;">
+                        <input type="file" id="inputPhoto" accept="image/*" style="display: none;">
+                    </div>
+                    <p class="form-hint">图片命名格式：年月-姓名.jpg，如 202603-张三.jpg</p>
+                </div>
+                <div class="form-group">
+                    <label for="inputMonth">所属月份</label>
+                    <select id="inputMonth">
+                        <option value="1">1月</option>
+                        <option value="2">2月</option>
+                        <option value="3" selected>3月</option>
+                        <option value="4">4月</option>
+                        <option value="5">5月</option>
+                        <option value="6">6月</option>
+                        <option value="7">7月</option>
+                        <option value="8">8月</option>
+                        <option value="9">9月</option>
+                        <option value="10">10月</option>
+                        <option value="11">11月</option>
+                        <option value="12">12月</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnCancelAdd">取消</button>
+                <button class="btn btn-primary" id="btnConfirmAdd">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="modalEditStory">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>编辑故事</h3>
+                <button class="btn-close" id="btnCloseStoryModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="inputStoryMonth">月份</label>
+                    <select id="inputStoryMonth">
+                        <option value="1">1月</option>
+                        <option value="2">2月</option>
+                        <option value="3" selected>3月</option>
+                        <option value="4">4月</option>
+                        <option value="5">5月</option>
+                        <option value="6">6月</option>
+                        <option value="7">7月</option>
+                        <option value="8">8月</option>
+                        <option value="9">9月</option>
+                        <option value="10">10月</option>
+                        <option value="11">11月</option>
+                        <option value="12">12月</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="inputStoryTitle">主题标题</label>
+                    <input type="text" id="inputStoryTitle" placeholder="如：开门红、春暖花开" maxlength="30">
+                </div>
+                <div class="form-group">
+                    <label for="inputStoryContent">故事内容</label>
+                    <textarea id="inputStoryContent" placeholder="请输入本月故事内容" rows="5" maxlength="500"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnCancelStory">取消</button>
+                <button class="btn btn-primary" id="btnConfirmStory">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="modalAllEmployees">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="modalAllTitle">3月 全部员工</h3>
+                <button class="btn-close" id="btnCloseAllModal">&times;</button>
+            </div>
+            <div class="modal-body" id="modalAllBody">
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">
+        <span id="toastMessage"></span>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

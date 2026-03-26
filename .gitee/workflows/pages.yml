@@ -1,0 +1,23 @@
+name: Gitee Pages
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 构建
+        run: |
+          mkdir -p dist
+          cp index.html dist/
+          cp -r css js dist/
+      - name: 部署
+        uses: qinchenguang1991/gitee-pages-action@v1.5.1
+        with:
+          gitee-username: zengweidaren
+          gitee-password: ${{ secrets.GITEE_PASSWORD }}
+          gitee-repo: zengweidaren/culture-wall
+          branch: master
+          directory: dist
