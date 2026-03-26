@@ -22,7 +22,7 @@ class CultureWall {
         this.employees = this.loadEmployees();
         this.viewMode = 'monthly';
         this.filterMonth = null;
-        
+        this.maxPhotoSize = 300 * 1024; // 300KB per photo limit
         this.init();
     }
 
@@ -64,10 +64,7 @@ class CultureWall {
         window.addEventListener('resize', resize);
 
         class Particle {
-            constructor() {
-                this.reset();
-            }
-
+            constructor() { this.reset(); }
             reset() {
                 this.x = Math.random() * canvas.width;
                 this.y = Math.random() * canvas.height;
@@ -77,15 +74,12 @@ class CultureWall {
                 this.opacity = Math.random() * 0.5 + 0.2;
                 this.hue = Math.random() * 60 + 180;
             }
-
             update() {
                 this.x += this.speedX;
                 this.y += this.speedY;
-
                 if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
                 if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
             }
-
             draw() {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -94,102 +88,69 @@ class CultureWall {
             }
         }
 
-        for (let i = 0; i < particleCount; i++) {
-            particles.push(new Particle());
-        }
+        for (let i = 0; i < particleCount; i++) particles.push(new Particle());
 
         const animate = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            particles.forEach(p => {
-                p.update();
-                p.draw();
-            });
+            particles.forEach(p => { p.update(); p.draw(); });
             requestAnimationFrame(animate);
         };
-
         animate();
     }
 
     bindEvents() {
         document.getElementById('btnMonthly').addEventListener('click', () => this.setViewMode('monthly'));
         document.getElementById('btnOverview').addEventListener('click', () => this.setViewMode('overview'));
-
         document.querySelectorAll('.month-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const month = parseInt(btn.dataset.month);
-                this.selectMonth(month);
-            });
+            btn.addEventListener('click', () => this.selectMonth(parseInt(btn.dataset.month)));
         });
-
         document.getElementById('btnAddEmployee').addEventListener('click', () => this.showAddModal());
         document.getElementById('btnCloseModal').addEventListener('click', () => this.hideAddModal());
         document.getElementById('btnCancelAdd').addEventListener('click', () => this.hideAddModal());
         document.getElementById('btnConfirmAdd').addEventListener('click', () => this.addEmployee());
-
         document.getElementById('btnEditStory').addEventListener('click', () => this.showEditStoryModal());
         document.getElementById('btnCloseStoryModal').addEventListener('click', () => this.hideEditStoryModal());
         document.getElementById('btnCancelStory').addEventListener('click', () => this.hideEditStoryModal());
         document.getElementById('btnConfirmStory').addEventListener('click', () => this.saveStory());
-
         document.getElementById('btnFilterMonth').addEventListener('click', () => this.toggleFilter());
-
-        document.getElementById('photoUpload').addEventListener('click', () => {
-            document.getElementById('inputPhoto').click();
-        });
-
+        document.getElementById('photoUpload').addEventListener('click', () => document.getElementById('inputPhoto').click());
         document.getElementById('inputPhoto').addEventListener('change', (e) => this.handlePhotoSelect(e));
-
         document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('active');
-                }
-            });
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('active'); });
         });
     }
 
     setViewMode(mode) {
         this.viewMode = mode;
-        
         document.getElementById('btnMonthly').classList.toggle('active', mode === 'monthly');
         document.getElementById('btnOverview').classList.toggle('active', mode === 'overview');
-
-        const monthSelector = document.getElementById('sectionStory');
         const employeesSection = document.getElementById('sectionEmployees');
         const allMonthsSection = document.getElementById('sectionAllMonths');
-
         if (mode === 'monthly') {
-            monthSelector.style.display = 'block';
             employeesSection.style.display = 'block';
             allMonthsSection.style.display = 'none';
             this.filterMonth = null;
         } else {
-            monthSelector.style.display = 'block';
             employeesSection.style.display = 'none';
             allMonthsSection.style.display = 'block';
             this.renderAllMonths();
         }
-
         this.updateFilterText();
     }
 
     selectMonth(month) {
         this.currentMonth = month;
-        
         document.querySelectorAll('.month-btn').forEach(btn => {
             btn.classList.toggle('active', parseInt(btn.dataset.month) === month);
         });
-
         document.getElementById('inputMonth').value = month;
-        
         this.updateYearMonth();
         this.renderStory();
         this.renderEmployees();
     }
 
     updateYearMonth() {
-        const yearMonth = document.getElementById('currentYearMonth');
-        yearMonth.textContent = `· ${this.currentYear}年${MONTH_NAMES[this.currentMonth - 1]}`;
+        document.getElementById('currentYearMonth').textContent = `· ${this.currentYear}年${MONTH_NAMES[this.currentMonth - 1]}`;
     }
 
     render() {
@@ -213,8 +174,7 @@ class CultureWall {
                     <div class="icon">👥</div>
                     <p>暂无员工信息</p>
                     <p>点击上方"添加员工"按钮添加</p>
-                </div>
-            `;
+                </div>`;
             return;
         }
 
@@ -232,24 +192,16 @@ class CultureWall {
                     <button class="btn-move" onclick="app.moveEmployee(${this.currentMonth}, ${index}, 1)" title="下移">↓</button>
                     <button class="btn-delete" onclick="app.deleteEmployee(${this.currentMonth}, ${index})" title="删除">🗑️</button>
                 </div>
-            </div>
-        `).join('');
+            </div>`).join('');
     }
 
-    getEmployeesByMonth(month) {
-        return this.employees[month] || [];
-    }
+    getEmployeesByMonth(month) { return this.employees[month] || []; }
 
     moveEmployee(month, index, direction) {
         const employees = this.employees[month] || [];
         const newIndex = index + direction;
-        
         if (newIndex < 0 || newIndex >= employees.length) return;
-        
-        const temp = employees[index];
-        employees[index] = employees[newIndex];
-        employees[newIndex] = temp;
-        
+        [employees[index], employees[newIndex]] = [employees[newIndex], employees[index]];
         this.employees[month] = employees;
         this.saveEmployees();
         this.renderEmployees();
@@ -258,7 +210,6 @@ class CultureWall {
 
     deleteEmployee(month, index) {
         if (!confirm('确定要删除这位员工吗？')) return;
-        
         const employees = this.employees[month] || [];
         employees.splice(index, 1);
         this.employees[month] = employees;
@@ -273,6 +224,8 @@ class CultureWall {
         document.getElementById('inputMonth').value = this.currentMonth;
         document.getElementById('photoPreview').style.display = 'none';
         document.getElementById('photoPlaceholder').style.display = 'flex';
+        document.getElementById('photoSizeWarning').textContent = '';
+        this.selectedPhotoDataUrl = null;
         this.selectedPhotoFile = null;
     }
 
@@ -284,44 +237,67 @@ class CultureWall {
         const file = e.target.files[0];
         if (!file) return;
 
-        this.selectedPhotoFile = file;
-
         const reader = new FileReader();
         reader.onload = (event) => {
+            let dataUrl = event.target.result;
+            
+            // 如果超过限制，压缩图片
+            if (file.size > this.maxPhotoSize) {
+                dataUrl = this.compressImage(dataUrl, file.type);
+                document.getElementById('photoSizeWarning').textContent = '⚠️ 图片已压缩';
+            } else {
+                document.getElementById('photoSizeWarning').textContent = '✓ 原始图片';
+            }
+
+            this.selectedPhotoDataUrl = dataUrl;
             const preview = document.getElementById('photoPreview');
-            preview.src = event.target.result;
+            preview.src = dataUrl;
             preview.style.display = 'block';
             document.getElementById('photoPlaceholder').style.display = 'none';
         };
         reader.readAsDataURL(file);
     }
 
+    compressImage(dataUrl, mimeType) {
+        const img = new Image();
+        img.src = dataUrl;
+        
+        const canvas = document.createElement('canvas');
+        const maxW = 400;
+        let w = img.width;
+        let h = img.height;
+        
+        if (w > maxW) {
+            h = (h * maxW) / w;
+            w = maxW;
+        }
+        
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        
+        let quality = 0.8;
+        let result = canvas.toDataURL(mimeType, quality);
+        
+        // 逐步降低质量直到小于限制
+        while (result.length * 0.75 > this.maxPhotoSize && quality > 0.1) {
+            quality -= 0.1;
+            result = canvas.toDataURL(mimeType, quality);
+        }
+        
+        return result;
+    }
+
     addEmployee() {
         const name = document.getElementById('inputName').value.trim();
         const month = parseInt(document.getElementById('inputMonth').value);
 
-        if (!name) {
-            this.showToast('请输入员工姓名');
-            return;
-        }
-
-        if (!this.employees[month]) {
-            this.employees[month] = [];
-        }
+        if (!name) { this.showToast('请输入员工姓名'); return; }
+        if (!this.employees[month]) this.employees[month] = [];
 
         const id = Date.now().toString();
-        const employee = {
-            id,
-            name,
-            photo: null,
-            photoName: null
-        };
-
-        if (this.selectedPhotoFile) {
-            const fileName = `${this.currentYear}${String(month).padStart(2, '0')}-${name}.${this.selectedPhotoFile.name.split('.').pop()}`;
-            employee.photoName = fileName;
-            employee.photo = URL.createObjectURL(this.selectedPhotoFile);
-        }
+        const employee = { id, name, photo: this.selectedPhotoDataUrl || null };
 
         this.employees[month].push(employee);
         this.saveEmployees();
@@ -345,74 +321,31 @@ class CultureWall {
         const month = parseInt(document.getElementById('inputStoryMonth').value);
         const title = document.getElementById('inputStoryTitle').value.trim();
         const story = document.getElementById('inputStoryContent').value.trim();
-
         MONTH_STORIES[month] = { title, story };
         this.hideEditStoryModal();
-        
-        if (month === this.currentMonth) {
-            this.renderStory();
-        }
-        
+        if (month === this.currentMonth) this.renderStory();
         this.showToast('故事已保存');
     }
 
     toggleFilter() {
-        if (this.filterMonth === null) {
-            this.filterMonth = this.currentMonth;
-        } else {
-            this.filterMonth = null;
-        }
+        this.filterMonth = this.filterMonth === null ? this.currentMonth : null;
         this.updateFilterText();
         this.renderAllMonths();
     }
 
     updateFilterText() {
         const filterText = document.getElementById('filterText');
-        if (this.filterMonth === null) {
-            filterText.textContent = '筛选全部月份';
-        } else {
-            filterText.textContent = `仅显示${MONTH_NAMES[this.filterMonth - 1]}`;
-        }
+        filterText.textContent = this.filterMonth === null ? '筛选全部月份' : `仅显示${MONTH_NAMES[this.filterMonth - 1]}`;
     }
 
     renderAllMonths() {
         const container = document.getElementById('allMonthsContent');
-        
-        if (this.filterMonth !== null) {
-            const monthEmployees = this.getEmployeesByMonth(this.filterMonth);
-            const story = MONTH_STORIES[this.filterMonth];
-            
-            container.innerHTML = `
-                <div class="month-section">
-                    <h3 class="month-title">${MONTH_NAMES[this.filterMonth - 1]}</h3>
-                    ${story ? `<div class="month-story-preview">${story.title}：${story.story}</div>` : ''}
-                    <div class="employees-inline">
-                        ${monthEmployees.length === 0 
-                            ? '<p style="color: var(--text-secondary);">暂无员工</p>'
-                            : monthEmployees.map(emp => `
-                                <div class="employee-inline-card">
-                                    <div class="avatar">
-                                        ${emp.photo 
-                                            ? `<img src="${emp.photo}" alt="${emp.name}" onerror="this.parentElement.innerHTML='${emp.name.charAt(0)}'">` 
-                                            : emp.name.charAt(0)
-                                        }
-                                    </div>
-                                    <span class="name">${emp.name}</span>
-                                </div>
-                            `).join('')
-                        }
-                    </div>
-                </div>
-            `;
-            return;
-        }
+        const months = this.filterMonth !== null ? [this.filterMonth] : Array.from({length: 12}, (_, i) => i + 1);
 
-        let html = '';
-        for (let month = 1; month <= 12; month++) {
+        container.innerHTML = months.map(month => {
             const monthEmployees = this.getEmployeesByMonth(month);
             const story = MONTH_STORIES[month];
-            
-            html += `
+            return `
                 <div class="month-section">
                     <h3 class="month-title">${MONTH_NAMES[month - 1]}</h3>
                     ${story ? `<div class="month-story-preview">${story.title}：${story.story}</div>` : ''}
@@ -428,25 +361,18 @@ class CultureWall {
                                         }
                                     </div>
                                     <span class="name">${emp.name}</span>
-                                </div>
-                            `).join('')
+                                </div>`).join('')
                         }
                     </div>
-                </div>
-            `;
-        }
-        
-        container.innerHTML = html;
+                </div>`;
+        }).join('');
     }
 
     showToast(message) {
         const toast = document.getElementById('toast');
         document.getElementById('toastMessage').textContent = message;
         toast.classList.add('show');
-        
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, 2500);
+        setTimeout(() => toast.classList.remove('show'), 2500);
     }
 }
 
