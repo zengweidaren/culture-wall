@@ -16,7 +16,6 @@
                 <span class="year-month" id="currentYearMonth"></span>
             </h1>
             <p class="subtitle">文化墙 · 记录每一个精彩瞬间</p>
-            <button class="btn-icon header-settings" id="btnSettings" title="设置">⚙️</button>
         </header>
 
         <div class="view-toggle">
@@ -34,7 +33,7 @@
             <div class="month-grid">
                 <button class="month-btn" data-month="1">1月</button>
                 <button class="month-btn" data-month="2">2月</button>
-                <button class="month-btn" data-month="3">3月</button>
+                <button class="month-btn active" data-month="3">3月</button>
                 <button class="month-btn" data-month="4">4月</button>
                 <button class="month-btn" data-month="5">5月</button>
                 <button class="month-btn" data-month="6">6月</button>
@@ -47,23 +46,9 @@
             </div>
         </section>
 
-        <section class="section-upload" id="sectionUpload">
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-placeholder">
-                    <span class="icon">📤</span>
-                    <span>点击选择图片上传</span>
-                    <span class="hint">或拖拽图片到此处</span>
-                </div>
-                <img id="uploadPreview" style="display: none;">
-                <input type="file" id="inputUpload" accept="image/*" style="display: none;">
-            </div>
-            <p class="upload-hint">图片命名格式：年月-姓名.jpg，如 202603-张三.jpg</p>
-            <div class="upload-status" id="uploadStatus"></div>
-        </section>
-
         <section class="section-gallery" id="sectionGallery">
             <div class="gallery-grid" id="galleryGrid"></div>
-            <div class="empty-state" id="emptyState" style="display: none;">
+            <div class="empty-state" id="emptyState">
                 <span class="icon">📷</span>
                 <span>暂无图片</span>
                 <span class="hint">上传图片后将显示在这里</span>
@@ -85,27 +70,6 @@
         <div class="modal-content modal-preview">
             <button class="btn-close" id="btnClosePreview">&times;</button>
             <img id="previewImage" src="" alt="预览">
-        </div>
-    </div>
-
-    <div class="modal" id="modalSettings">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>⚙️ 设置</h3>
-                <button class="btn-close" id="btnCloseSettings">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="inputGithubToken">GitHub Personal Access Token</label>
-                    <input type="password" id="inputGithubToken" placeholder="请输入 GitHub Token" maxlength="50">
-                    <p class="form-hint">用于上传图片到 GitHub 仓库，Token 只保存在本地浏览器中</p>
-                </div>
-                <div class="token-status" id="tokenStatus"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="btnClearToken">清除Token</button>
-                <button class="btn btn-primary" id="btnSaveToken">保存</button>
-            </div>
         </div>
     </div>
 
