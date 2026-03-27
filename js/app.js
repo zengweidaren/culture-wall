@@ -4,14 +4,8 @@ const GITHUB_CONFIG = {
     owner: 'zengweidaren',
     repo: 'culture-wall',
     branch: 'master',
-    uploadsPath: 'uploads',
-    token: localStorage.getItem('githubToken') || '',
-    apiBase: 'https://api.github.com'
+    rawBase: 'https://raw.githubusercontent.com/zengweidaren/culture-wall/master'
 };
-
-if (!GITHUB_CONFIG.token) {
-    console.warn('GitHub Token 未配置 图片上传功能不可用。请在浏览器控制台设置: localStorage.setItem("githubToken", "your_token")');
-}
 
 class CultureWall {
     constructor() {
@@ -26,7 +20,7 @@ class CultureWall {
     async init() {
         this.initParticles();
         this.bindEvents();
-        await this.loadImagesFromGithub();
+        await this.loadImagesFromJson();
         this.render();
     }
 
@@ -79,32 +73,6 @@ class CultureWall {
         document.getElementById('btnMonthly').addEventListener('click', () => this.setViewMode('monthly'));
         document.getElementById('btnOverview').addEventListener('click', () => this.setViewMode('overview'));
 
-        const uploadArea = document.getElementById('uploadArea');
-        const inputUpload = document.getElementById('inputUpload');
-
-        uploadArea.addEventListener('click', () => inputUpload.click());
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
-                this.handleUpload(file);
-            }
-        });
-        inputUpload.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                this.handleUpload(file);
-            }
-        });
-
         document.getElementById('btnClosePreview').addEventListener('click', () => {
             document.getElementById('modalPreview').classList.remove('active');
         });
@@ -113,11 +81,6 @@ class CultureWall {
                 document.getElementById('modalPreview').classList.remove('active');
             }
         });
-
-        document.getElementById('btnSettings').addEventListener('click', () => this.showSettingsModal());
-        document.getElementById('btnCloseSettings').addEventListener('click', () => this.hideSettingsModal());
-        document.getElementById('btnSaveToken').addEventListener('click', () => this.saveGithubToken());
-        document.getElementById('btnClearToken').addEventListener('click', () => this.clearGithubToken());
     }
 
     setViewMode(mode) {
@@ -125,7 +88,6 @@ class CultureWall {
         document.getElementById('btnMonthly').classList.toggle('active', mode === 'monthly');
         document.getElementById('btnOverview').classList.toggle('active', mode === 'overview');
         document.getElementById('monthSelector').style.display = mode === 'monthly' ? 'block' : 'none';
-        document.getElementById('sectionUpload').style.display = mode === 'monthly' ? 'block' : 'none';
         document.getElementById('sectionGallery').style.display = mode === 'monthly' ? 'block' : 'none';
         document.getElementById('sectionAllMonths').style.display = mode === 'overview' ? 'block' : 'none';
         
@@ -136,184 +98,22 @@ class CultureWall {
         }
     }
 
-    showSettingsModal() {
-        const token = localStorage.getItem('githubToken') || '';
-        document.getElementById('inputGithubToken').value = token;
-        this.updateTokenStatus();
-        document.getElementById('modalSettings').classList.add('active');
-    }
-
-    hideSettingsModal() {
-        document.getElementById('modalSettings').classList.remove('active');
-    }
-
-    saveGithubToken() {
-        const token = document.getElementById('inputGithubToken').value.trim();
-        if (token) {
-            localStorage.setItem('githubToken', token);
-            GITHUB_CONFIG.token = token;
-            this.hideSettingsModal();
-            this.showToast('Token 保存成功！');
-        } else {
-            this.showToast('请输入 Token');
-        }
-    }
-
-    clearGithubToken() {
-        localStorage.removeItem('githubToken');
-        GITHUB_CONFIG.token = '';
-        document.getElementById('inputGithubToken').value = '';
-        this.updateTokenStatus();
-        this.showToast('Token 已清除');
-    }
-
-    updateTokenStatus() {
-        const status = document.getElementById('tokenStatus');
-        if (GITHUB_CONFIG.token) {
-            status.innerHTML = '<span class="token-ok">✓ Token 已配置</span>';
-        } else {
-            status.innerHTML = '<span class="token-empty">✗ Token 未配置</span>';
-        }
-    }
-
-    async githubApi(path, options = {}) {
-        const url = `${GITHUB_CONFIG.apiBase}${path}`;
-        const headers = {
-            'Authorization': `token ${GITHUB_CONFIG.token}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
-        };
-
+    async loadImagesFromJson() {
         try {
-            const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } });
-            const data = await response.json();
-            
+            const response = await fetch(`${GITHUB_CONFIG.rawBase}/data/images.json`);
             if (!response.ok) {
-                throw new Error(data.message || 'GitHub API error');
+                throw new Error('images.json not found');
             }
-            return data;
-        } catch (error) {
-            console.error('GitHub API error:', error);
-            throw error;
-        }
-    }
-
-    async loadImagesFromGithub() {
-        if (!GITHUB_CONFIG.token) {
-            console.warn('Token 未配置，无法从 GitHub 加载图片');
-            this.images = [];
-            return;
-        }
-
-        try {
-            const data = await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.uploadsPath}?ref=${GITHUB_CONFIG.branch}`);
-            
-            if (!Array.isArray(data)) {
-                console.log('uploads 目录不存在或为空');
-                this.images = [];
-                return;
-            }
-
-            this.images = data
-                .filter(file => file.type === 'file' && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name))
-                .map(file => {
-                    const parsed = this.parseFileName(file.name);
-                    return {
-                        name: file.name,
-                        path: file.path,
-                        downloadUrl: file.download_url,
-                        sha: file.sha,
-                        month: parsed.month,
-                        nameInFile: parsed.nameInFile,
-                        year: parsed.year
-                    };
-                })
-                .sort((a, b) => {
-                    if (a.year !== b.year) return b.year - a.year;
-                    return b.month - a.month;
-                });
-
+            const data = await response.json();
+            this.images = data.sort((a, b) => {
+                if (a.year !== b.year) return b.year - a.year;
+                return b.month - a.month;
+            });
             console.log(`加载了 ${this.images.length} 张图片`);
         } catch (error) {
-            console.log('从 GitHub 加载图片失败:', error.message);
+            console.log('加载 images.json 失败:', error.message);
             this.images = [];
         }
-    }
-
-    parseFileName(fileName) {
-        const match = fileName.match(/^(\d{4})(\d{2})-(.+)\.[^.]+$/);
-        if (match) {
-            return {
-                year: parseInt(match[1]),
-                month: parseInt(match[2]),
-                nameInFile: match[3]
-            };
-        }
-        return { year: null, month: null, nameInFile: fileName.replace(/\.[^.]+$/, '') };
-    }
-
-    async handleUpload(file) {
-        if (!GITHUB_CONFIG.token) {
-            this.showToast('请先设置 GitHub Token');
-            this.showSettingsModal();
-            return;
-        }
-
-        const preview = document.getElementById('uploadPreview');
-        const placeholder = document.querySelector('.upload-placeholder');
-        const status = document.getElementById('uploadStatus');
-
-        preview.src = URL.createObjectURL(file);
-        preview.style.display = 'block';
-        placeholder.style.display = 'none';
-
-        status.textContent = '正在上传...';
-        status.className = 'upload-status uploading';
-
-        try {
-            const base64 = await this.fileToBase64(file);
-            const fileName = file.name;
-            
-            const existingFile = this.images.find(img => img.name === fileName);
-            const body = {
-                message: `Upload ${fileName}`,
-                content: base64,
-                branch: GITHUB_CONFIG.branch
-            };
-
-            if (existingFile) {
-                body.sha = existingFile.sha;
-            }
-
-            await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.uploadsPath}/${fileName}`, {
-                method: 'PUT',
-                body: JSON.stringify(body)
-            });
-
-            status.textContent = '上传成功！';
-            status.className = 'upload-status success';
-
-            setTimeout(() => {
-                preview.style.display = 'none';
-                placeholder.style.display = 'flex';
-                status.textContent = '';
-            }, 2000);
-
-            await this.loadImagesFromGithub();
-            this.renderGallery();
-        } catch (error) {
-            status.textContent = `上传失败: ${error.message}`;
-            status.className = 'upload-status error';
-        }
-    }
-
-    fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
     }
 
     render() {
@@ -321,7 +121,6 @@ class CultureWall {
             btn.classList.toggle('active', parseInt(btn.dataset.month) === this.currentMonth);
         });
         this.renderGallery();
-        this.updateTokenStatus();
     }
 
     renderGallery() {
@@ -341,19 +140,15 @@ class CultureWall {
         emptyState.style.display = 'none';
 
         grid.innerHTML = filtered.map(img => `
-            <div class="gallery-item" data-path="${img.path}">
-                <img src="${img.downloadUrl}" alt="${img.nameInFile}" loading="lazy">
-                <div class="gallery-item-info">${img.nameInFile}</div>
+            <div class="gallery-item" data-download-url="${img.downloadUrl}">
+                <img src="${img.downloadUrl}" alt="${img.name}" loading="lazy">
+                <div class="gallery-item-info">${img.name.replace(/\.[^.]+$/, '')}</div>
             </div>
         `).join('');
 
         grid.querySelectorAll('.gallery-item').forEach(item => {
             item.addEventListener('click', () => {
-                const path = item.dataset.path;
-                const image = this.images.find(img => img.path === path);
-                if (image) {
-                    this.showPreview(image.downloadUrl);
-                }
+                this.showPreview(item.dataset.downloadUrl);
             });
         });
     }
@@ -385,9 +180,9 @@ class CultureWall {
                     <h3 class="all-months-title">${year}年${MONTH_NAMES[parseInt(month) - 1]}</h3>
                     <div class="all-months-grid">
                         ${images.map(img => `
-                            <div class="gallery-item" data-path="${img.path}">
-                                <img src="${img.downloadUrl}" alt="${img.nameInFile}" loading="lazy">
-                                <div class="gallery-item-info">${img.nameInFile}</div>
+                            <div class="gallery-item" data-download-url="${img.downloadUrl}">
+                                <img src="${img.downloadUrl}" alt="${img.name}" loading="lazy">
+                                <div class="gallery-item-info">${img.name.replace(/\.[^.]+$/, '')}</div>
                             </div>
                         `).join('')}
                     </div>
@@ -397,11 +192,7 @@ class CultureWall {
 
         container.querySelectorAll('.gallery-item').forEach(item => {
             item.addEventListener('click', () => {
-                const path = item.dataset.path;
-                const image = this.images.find(img => img.path === path);
-                if (image) {
-                    this.showPreview(image.downloadUrl);
-                }
+                this.showPreview(item.dataset.downloadUrl);
             });
         });
     }
