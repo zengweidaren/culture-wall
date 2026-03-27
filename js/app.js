@@ -33,51 +33,22 @@ class CultureWall {
     constructor() {
         this.currentMonth = new Date().getMonth() + 1;
         this.currentYear = new Date().getFullYear();
-        this.employees = this.loadEmployees();
+        this.employees = {};
         this.monthStories = this.loadStories();
         this.viewMode = 'monthly';
         this.filterMonth = null;
+        this.dataLoaded = false;
         
         this.init();
     }
 
-    init() {
+    async init() {
         this.initParticles();
         this.bindEvents();
+        await this.loadEmployeesFromGithub();
+        this.dataLoaded = true;
         this.render();
         this.updateYearMonth();
-    }
-
-    loadEmployees() {
-        const stored = localStorage.getItem('cultureWallEmployees');
-        if (stored) {
-            try {
-                return JSON.parse(stored);
-            } catch (e) {
-                console.error('Failed to parse employees data', e);
-            }
-        }
-        return {};
-    }
-
-    saveEmployees() {
-        localStorage.setItem('cultureWallEmployees', JSON.stringify(this.employees));
-    }
-
-    loadStories() {
-        const stored = localStorage.getItem(MONTH_STORIES_KEY);
-        if (stored) {
-            try {
-                return { ...MONTH_STORIES_DEFAULT, ...JSON.parse(stored) };
-            } catch (e) {
-                console.error('Failed to parse stories', e);
-            }
-        }
-        return { ...MONTH_STORIES_DEFAULT };
-    }
-
-    saveStories() {
-        localStorage.setItem(MONTH_STORIES_KEY, JSON.stringify(this.monthStories));
     }
 
     async githubApi(path, options = {}) {
@@ -151,6 +122,109 @@ class CultureWall {
         });
 
         return true;
+    }
+
+    async loadEmployeesFromGithub() {
+        try {
+            const data = await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/data/employees.json?ref=${GITHUB_CONFIG.branch}`);
+            const content = atob(data.content);
+            this.employees = JSON.parse(content);
+            return;
+        } catch (error) {
+            console.log('员工数据文件不存在或加载失败，使用空数据');
+        }
+        this.employees = {};
+    }
+
+    async saveEmployeesToGithub() {
+        if (!GITHUB_CONFIG.token) {
+            console.warn('Token 未配置，无法保存到 GitHub');
+            return false;
+        }
+
+        try {
+            const content = JSON.stringify(this.employees, null, 2);
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            const path = 'data/employees.json';
+            const sha = await this.getFileSha(path);
+            
+            const body = {
+                message: 'Update employees data',
+                content: base64Content,
+                branch: GITHUB_CONFIG.branch
+            };
+            
+            if (sha) {
+                body.sha = sha;
+            }
+
+            await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
+                method: 'PUT',
+                body: JSON.stringify(body)
+            });
+
+            localStorage.setItem('cultureWallEmployees', JSON.stringify(this.employees));
+            return true;
+        } catch (error) {
+            console.error('保存员工数据到 GitHub 失败:', error);
+            localStorage.setItem('cultureWallEmployees', JSON.stringify(this.employees));
+            return false;
+        }
+    }
+
+    loadEmployees() {
+        return this.employees;
+    }
+
+    saveEmployees() {
+        this.saveEmployeesToGithub();
+    }
+
+    loadStories() {
+        const stored = localStorage.getItem(MONTH_STORIES_KEY);
+        if (stored) {
+            try {
+                return { ...MONTH_STORIES_DEFAULT, ...JSON.parse(stored) };
+            } catch (e) {
+                console.error('Failed to parse stories', e);
+            }
+        }
+        return { ...MONTH_STORIES_DEFAULT };
+    }
+
+    saveStories() {
+        localStorage.setItem(MONTH_STORIES_KEY, JSON.stringify(this.monthStories));
+    }
+
+    async githubApi(path, options = {}) {
+        const url = `${GITHUB_CONFIG.apiBase}${path}`;
+        const headers = {
+            'Authorization': `token ${GITHUB_CONFIG.token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        };
+
+        try {
+            const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } });
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || 'GitHub API error');
+            }
+            return data;
+        } catch (error) {
+            console.error('GitHub API error:', error);
+            throw error;
+        }
+    }
+
+    async getFileSha(path) {
+        try {
+            const data = await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}?ref=${GITHUB_CONFIG.branch}`);
+            return data.sha;
+        } catch (error) {
+            return null;
+        }
     }
 
     async uploadPhoto(file) {
