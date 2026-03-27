@@ -1,6 +1,20 @@
 const MONTH_NAMES = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
 
-const MONTH_STORIES = {
+const GITHUB_CONFIG = {
+    owner: 'zengweidaren',
+    repo: 'culture-wall',
+    branch: 'master',
+    token: localStorage.getItem('githubToken') || '',
+    apiBase: 'https://api.github.com'
+};
+
+if (!GITHUB_CONFIG.token) {
+    console.warn('GitHub Token 未配置 图片上传功能不可用。请在浏览器控制台设置: localStorage.setItem("githubToken", "your_token")');
+}
+
+const MONTH_STORIES_KEY = 'cultureWallStories';
+
+const MONTH_STORIES_DEFAULT = {
     1: { title: '开门红', story: '新年伊始，部门全员冲刺Q1目标，圆满完成各项任务指标，实现开门红。' },
     2: { title: '春节特辑', story: '春节期间值班团队坚守岗位，保障系统稳定运行，让全体员工安心过年。' },
     3: { title: '春暖花开', story: '阳春三月，部门组织户外拓展活动，增强团队凝聚力与协作能力。' },
@@ -19,34 +33,216 @@ class CultureWall {
     constructor() {
         this.currentMonth = new Date().getMonth() + 1;
         this.currentYear = new Date().getFullYear();
-        this.employees = this.loadEmployees();
+        this.employees = {};
+        this.monthStories = this.loadStories();
         this.viewMode = 'monthly';
         this.filterMonth = null;
-        this.maxPhotoSize = 300 * 1024; // 300KB per photo limit
+        this.dataLoaded = false;
+        
         this.init();
     }
 
-    init() {
+    async init() {
         this.initParticles();
         this.bindEvents();
+        await this.loadEmployeesFromGithub();
+        this.dataLoaded = true;
         this.render();
         this.updateYearMonth();
     }
 
-    loadEmployees() {
-        const stored = localStorage.getItem('cultureWallEmployees');
-        if (stored) {
-            try {
-                return JSON.parse(stored);
-            } catch (e) {
-                console.error('Failed to parse employees data', e);
+    async githubApi(path, options = {}) {
+        const url = `${GITHUB_CONFIG.apiBase}${path}`;
+        const headers = {
+            'Authorization': `token ${GITHUB_CONFIG.token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        };
+
+        try {
+            const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } });
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || 'GitHub API error');
             }
+            return data;
+        } catch (error) {
+            console.error('GitHub API error:', error);
+            throw error;
         }
-        return {};
+    }
+
+    async getFileSha(path) {
+        try {
+            const data = await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}?ref=${GITHUB_CONFIG.branch}`);
+            return data.sha;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async uploadToGithub(fileName, base64Content) {
+        const path = `uploads/${fileName}`;
+        const sha = await this.getFileSha(path);
+        
+        const body = {
+            message: `Upload ${fileName}`,
+            content: base64Content,
+            branch: GITHUB_CONFIG.branch
+        };
+        
+        if (sha) {
+            body.sha = sha;
+        }
+
+        const data = await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
+            method: 'PUT',
+            body: JSON.stringify(body)
+        });
+
+        return data.content?.download_url || `https://raw.githubusercontent.com/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/${GITHUB_CONFIG.branch}/${path}`;
+    }
+
+    async deleteFromGithub(fileName) {
+        const path = `uploads/${fileName}`;
+        const sha = await this.getFileSha(path);
+        
+        if (!sha) {
+            return true;
+        }
+
+        await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
+            method: 'DELETE',
+            body: JSON.stringify({
+                message: `Delete ${fileName}`,
+                sha: sha,
+                branch: GITHUB_CONFIG.branch
+            })
+        });
+
+        return true;
+    }
+
+    async loadEmployeesFromGithub() {
+        try {
+            const data = await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/data/employees.json?ref=${GITHUB_CONFIG.branch}`);
+            const content = atob(data.content);
+            this.employees = JSON.parse(content);
+            return;
+        } catch (error) {
+            console.log('员工数据文件不存在或加载失败，使用空数据');
+        }
+        this.employees = {};
+    }
+
+    async saveEmployeesToGithub() {
+        if (!GITHUB_CONFIG.token) {
+            console.warn('Token 未配置，无法保存到 GitHub');
+            return false;
+        }
+
+        try {
+            const content = JSON.stringify(this.employees, null, 2);
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            const path = 'data/employees.json';
+            const sha = await this.getFileSha(path);
+            
+            const body = {
+                message: 'Update employees data',
+                content: base64Content,
+                branch: GITHUB_CONFIG.branch
+            };
+            
+            if (sha) {
+                body.sha = sha;
+            }
+
+            await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
+                method: 'PUT',
+                body: JSON.stringify(body)
+            });
+
+            localStorage.setItem('cultureWallEmployees', JSON.stringify(this.employees));
+            return true;
+        } catch (error) {
+            console.error('保存员工数据到 GitHub 失败:', error);
+            localStorage.setItem('cultureWallEmployees', JSON.stringify(this.employees));
+            return false;
+        }
+    }
+
+    loadEmployees() {
+        return this.employees;
     }
 
     saveEmployees() {
-        localStorage.setItem('cultureWallEmployees', JSON.stringify(this.employees));
+        this.saveEmployeesToGithub();
+    }
+
+    loadStories() {
+        const stored = localStorage.getItem(MONTH_STORIES_KEY);
+        if (stored) {
+            try {
+                return { ...MONTH_STORIES_DEFAULT, ...JSON.parse(stored) };
+            } catch (e) {
+                console.error('Failed to parse stories', e);
+            }
+        }
+        return { ...MONTH_STORIES_DEFAULT };
+    }
+
+    saveStories() {
+        localStorage.setItem(MONTH_STORIES_KEY, JSON.stringify(this.monthStories));
+    }
+
+    async githubApi(path, options = {}) {
+        const url = `${GITHUB_CONFIG.apiBase}${path}`;
+        const headers = {
+            'Authorization': `token ${GITHUB_CONFIG.token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        };
+
+        try {
+            const response = await fetch(url, { ...options, headers: { ...headers, ...options.headers } });
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || 'GitHub API error');
+            }
+            return data;
+        } catch (error) {
+            console.error('GitHub API error:', error);
+            throw error;
+        }
+    }
+
+    async getFileSha(path) {
+        try {
+            const data = await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}?ref=${GITHUB_CONFIG.branch}`);
+            return data.sha;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async uploadPhoto(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const base64 = e.target.result.split(',')[1];
+                    const fileName = `${this.currentYear}${String(this.currentMonth).padStart(2, '0')}-${name}.${file.name.split('.').pop()}`;
+                    const url = await this.uploadToGithub(fileName, base64);
+                    resolve({ fileName, url });
+                } catch (error) {
+                    reject(error);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     }
 
     initParticles() {
@@ -64,7 +260,10 @@ class CultureWall {
         window.addEventListener('resize', resize);
 
         class Particle {
-            constructor() { this.reset(); }
+            constructor() {
+                this.reset();
+            }
+
             reset() {
                 this.x = Math.random() * canvas.width;
                 this.y = Math.random() * canvas.height;
@@ -74,12 +273,15 @@ class CultureWall {
                 this.opacity = Math.random() * 0.5 + 0.2;
                 this.hue = Math.random() * 60 + 180;
             }
+
             update() {
                 this.x += this.speedX;
                 this.y += this.speedY;
+
                 if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
                 if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
             }
+
             draw() {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -88,69 +290,148 @@ class CultureWall {
             }
         }
 
-        for (let i = 0; i < particleCount; i++) particles.push(new Particle());
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
 
         const animate = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            particles.forEach(p => { p.update(); p.draw(); });
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
             requestAnimationFrame(animate);
         };
+
         animate();
     }
 
     bindEvents() {
         document.getElementById('btnMonthly').addEventListener('click', () => this.setViewMode('monthly'));
         document.getElementById('btnOverview').addEventListener('click', () => this.setViewMode('overview'));
+
         document.querySelectorAll('.month-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.selectMonth(parseInt(btn.dataset.month)));
+            btn.addEventListener('click', () => {
+                const month = parseInt(btn.dataset.month);
+                this.selectMonth(month);
+            });
         });
+
         document.getElementById('btnAddEmployee').addEventListener('click', () => this.showAddModal());
         document.getElementById('btnCloseModal').addEventListener('click', () => this.hideAddModal());
         document.getElementById('btnCancelAdd').addEventListener('click', () => this.hideAddModal());
-        document.getElementById('btnConfirmAdd').addEventListener('click', () => this.addEmployee());
+        document.getElementById('btnConfirmAdd').addEventListener('click', () => this.confirmAddEmployee());
+
         document.getElementById('btnEditStory').addEventListener('click', () => this.showEditStoryModal());
         document.getElementById('btnCloseStoryModal').addEventListener('click', () => this.hideEditStoryModal());
         document.getElementById('btnCancelStory').addEventListener('click', () => this.hideEditStoryModal());
         document.getElementById('btnConfirmStory').addEventListener('click', () => this.saveStory());
+
         document.getElementById('btnFilterMonth').addEventListener('click', () => this.toggleFilter());
-        document.getElementById('photoUpload').addEventListener('click', () => document.getElementById('inputPhoto').click());
-        document.getElementById('inputPhoto').addEventListener('change', (e) => this.handlePhotoSelect(e));
-        document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('active'); });
+
+        document.getElementById('photoUpload').addEventListener('click', () => {
+            document.getElementById('inputPhoto').click();
         });
+
+        document.getElementById('inputPhoto').addEventListener('change', (e) => this.handlePhotoSelect(e));
+
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+
+        document.getElementById('btnSettings').addEventListener('click', () => this.showSettingsModal());
+        document.getElementById('btnCloseSettings').addEventListener('click', () => this.hideSettingsModal());
+        document.getElementById('btnSaveToken').addEventListener('click', () => this.saveGithubToken());
+        document.getElementById('btnClearToken').addEventListener('click', () => this.clearGithubToken());
+    }
+
+    showSettingsModal() {
+        const token = localStorage.getItem('githubToken') || '';
+        document.getElementById('inputGithubToken').value = token;
+        this.updateTokenStatus();
+        document.getElementById('modalSettings').classList.add('active');
+    }
+
+    hideSettingsModal() {
+        document.getElementById('modalSettings').classList.remove('active');
+    }
+
+    updateTokenStatus() {
+        const status = document.getElementById('tokenStatus');
+        const token = localStorage.getItem('githubToken');
+        if (token) {
+            status.innerHTML = '<span style="color: #2ed573;">✓ Token 已配置</span>';
+        } else {
+            status.innerHTML = '<span style="color: #ff4757;">✗ Token 未配置，图片上传功能不可用</span>';
+        }
+    }
+
+    saveGithubToken() {
+        const token = document.getElementById('inputGithubToken').value.trim();
+        if (token) {
+            localStorage.setItem('githubToken', token);
+            GITHUB_CONFIG.token = token;
+            this.hideSettingsModal();
+            this.showToast('Token 保存成功！');
+        } else {
+            this.showToast('请输入 Token');
+        }
+    }
+
+    clearGithubToken() {
+        localStorage.removeItem('githubToken');
+        GITHUB_CONFIG.token = '';
+        document.getElementById('inputGithubToken').value = '';
+        this.updateTokenStatus();
+        this.showToast('Token 已清除');
     }
 
     setViewMode(mode) {
         this.viewMode = mode;
+        
         document.getElementById('btnMonthly').classList.toggle('active', mode === 'monthly');
         document.getElementById('btnOverview').classList.toggle('active', mode === 'overview');
+
+        const monthSelector = document.getElementById('sectionStory');
         const employeesSection = document.getElementById('sectionEmployees');
         const allMonthsSection = document.getElementById('sectionAllMonths');
+
         if (mode === 'monthly') {
+            monthSelector.style.display = 'block';
             employeesSection.style.display = 'block';
             allMonthsSection.style.display = 'none';
             this.filterMonth = null;
         } else {
+            monthSelector.style.display = 'block';
             employeesSection.style.display = 'none';
             allMonthsSection.style.display = 'block';
             this.renderAllMonths();
         }
+
         this.updateFilterText();
     }
 
     selectMonth(month) {
         this.currentMonth = month;
+        
         document.querySelectorAll('.month-btn').forEach(btn => {
             btn.classList.toggle('active', parseInt(btn.dataset.month) === month);
         });
+
         document.getElementById('inputMonth').value = month;
+        
         this.updateYearMonth();
         this.renderStory();
         this.renderEmployees();
     }
 
     updateYearMonth() {
-        document.getElementById('currentYearMonth').textContent = `· ${this.currentYear}年${MONTH_NAMES[this.currentMonth - 1]}`;
+        const yearMonth = document.getElementById('currentYearMonth');
+        yearMonth.textContent = `· ${this.currentYear}年${MONTH_NAMES[this.currentMonth - 1]}`;
     }
 
     render() {
@@ -159,7 +440,7 @@ class CultureWall {
     }
 
     renderStory() {
-        const story = MONTH_STORIES[this.currentMonth] || { title: '', story: '' };
+        const story = this.monthStories[this.currentMonth] || { title: '', story: '' };
         document.getElementById('storyTitle').textContent = story.title;
         document.getElementById('storyContent').textContent = story.story;
     }
@@ -174,7 +455,8 @@ class CultureWall {
                     <div class="icon">👥</div>
                     <p>暂无员工信息</p>
                     <p>点击上方"添加员工"按钮添加</p>
-                </div>`;
+                </div>
+            `;
             return;
         }
 
@@ -192,25 +474,45 @@ class CultureWall {
                     <button class="btn-move" onclick="app.moveEmployee(${this.currentMonth}, ${index}, 1)" title="下移">↓</button>
                     <button class="btn-delete" onclick="app.deleteEmployee(${this.currentMonth}, ${index})" title="删除">🗑️</button>
                 </div>
-            </div>`).join('');
+            </div>
+        `).join('');
     }
 
-    getEmployeesByMonth(month) { return this.employees[month] || []; }
+    getEmployeesByMonth(month) {
+        return this.employees[month] || [];
+    }
 
     moveEmployee(month, index, direction) {
         const employees = this.employees[month] || [];
         const newIndex = index + direction;
+        
         if (newIndex < 0 || newIndex >= employees.length) return;
-        [employees[index], employees[newIndex]] = [employees[newIndex], employees[index]];
+        
+        const temp = employees[index];
+        employees[index] = employees[newIndex];
+        employees[newIndex] = temp;
+        
         this.employees[month] = employees;
         this.saveEmployees();
         this.renderEmployees();
         this.showToast('位置已调整');
     }
 
-    deleteEmployee(month, index) {
-        if (!confirm('确定要删除这位员工吗？')) return;
+    async deleteEmployee(month, index) {
+        if (!confirm('确定要删除这位员工吗？图片也会从 GitHub 删除！')) return;
+        
         const employees = this.employees[month] || [];
+        const employee = employees[index];
+        
+        if (employee.photoName) {
+            try {
+                await this.deleteFromGithub(employee.photoName);
+                this.showToast('正在删除图片...');
+            } catch (error) {
+                console.error('Delete image error:', error);
+            }
+        }
+        
         employees.splice(index, 1);
         this.employees[month] = employees;
         this.saveEmployees();
@@ -224,9 +526,8 @@ class CultureWall {
         document.getElementById('inputMonth').value = this.currentMonth;
         document.getElementById('photoPreview').style.display = 'none';
         document.getElementById('photoPlaceholder').style.display = 'flex';
-        document.getElementById('photoSizeWarning').textContent = '';
-        this.selectedPhotoDataUrl = null;
         this.selectedPhotoFile = null;
+        this.pendingEmployeeName = null;
     }
 
     hideAddModal() {
@@ -237,80 +538,97 @@ class CultureWall {
         const file = e.target.files[0];
         if (!file) return;
 
+        this.selectedPhotoFile = file;
+
         const reader = new FileReader();
         reader.onload = (event) => {
-            let dataUrl = event.target.result;
-            
-            // 如果超过限制，压缩图片
-            if (file.size > this.maxPhotoSize) {
-                dataUrl = this.compressImage(dataUrl, file.type);
-                document.getElementById('photoSizeWarning').textContent = '⚠️ 图片已压缩';
-            } else {
-                document.getElementById('photoSizeWarning').textContent = '✓ 原始图片';
-            }
-
-            this.selectedPhotoDataUrl = dataUrl;
             const preview = document.getElementById('photoPreview');
-            preview.src = dataUrl;
+            preview.src = event.target.result;
             preview.style.display = 'block';
             document.getElementById('photoPlaceholder').style.display = 'none';
         };
         reader.readAsDataURL(file);
     }
 
-    compressImage(dataUrl, mimeType) {
-        const img = new Image();
-        img.src = dataUrl;
-        
-        const canvas = document.createElement('canvas');
-        const maxW = 400;
-        let w = img.width;
-        let h = img.height;
-        
-        if (w > maxW) {
-            h = (h * maxW) / w;
-            w = maxW;
-        }
-        
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        
-        let quality = 0.8;
-        let result = canvas.toDataURL(mimeType, quality);
-        
-        // 逐步降低质量直到小于限制
-        while (result.length * 0.75 > this.maxPhotoSize && quality > 0.1) {
-            quality -= 0.1;
-            result = canvas.toDataURL(mimeType, quality);
-        }
-        
-        return result;
+    showAddModalWithName(name) {
+        this.pendingEmployeeName = name;
+        document.getElementById('modalAddEmployee').classList.add('active');
+        document.getElementById('inputName').value = name;
+        document.getElementById('inputName').disabled = true;
+        document.getElementById('inputMonth').value = this.currentMonth;
+        document.getElementById('photoPreview').style.display = 'none';
+        document.getElementById('photoPlaceholder').style.display = 'flex';
+        this.selectedPhotoFile = null;
     }
 
-    addEmployee() {
+    async confirmAddEmployee() {
         const name = document.getElementById('inputName').value.trim();
         const month = parseInt(document.getElementById('inputMonth').value);
 
-        if (!name) { this.showToast('请输入员工姓名'); return; }
-        if (!this.employees[month]) this.employees[month] = [];
+        if (!name) {
+            this.showToast('请输入员工姓名');
+            return;
+        }
+
+        this.hideAddModal();
+
+        let photoUrl = null;
+        let photoName = null;
+
+        if (this.selectedPhotoFile) {
+            if (!GITHUB_CONFIG.token) {
+                photoUrl = URL.createObjectURL(this.selectedPhotoFile);
+                this.showToast('未配置 Token，图片仅本地预览');
+            } else {
+                this.showToast('正在上传图片...');
+                try {
+                    const ext = this.selectedPhotoFile.name.split('.').pop();
+                    photoName = `${this.currentYear}${String(month).padStart(2, '0')}-${name}.${ext}`;
+                    photoUrl = await this.uploadToGithub(photoName, await this.fileToBase64(this.selectedPhotoFile));
+                    this.showToast('图片上传成功！');
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    photoUrl = URL.createObjectURL(this.selectedPhotoFile);
+                    this.showToast('上传失败，图片仅本地预览');
+                }
+            }
+        }
+
+        if (!this.employees[month]) {
+            this.employees[month] = [];
+        }
 
         const id = Date.now().toString();
-        const employee = { id, name, photo: this.selectedPhotoDataUrl || null };
+        const employee = {
+            id,
+            name,
+            photo: photoUrl,
+            photoName
+        };
 
         this.employees[month].push(employee);
         this.saveEmployees();
-        this.hideAddModal();
         this.renderEmployees();
         this.showToast(`${name} 已添加`);
+        
+        document.getElementById('inputName').disabled = false;
+        this.pendingEmployeeName = null;
+    }
+
+    fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     }
 
     showEditStoryModal() {
         document.getElementById('modalEditStory').classList.add('active');
         document.getElementById('inputStoryMonth').value = this.currentMonth;
-        document.getElementById('inputStoryTitle').value = MONTH_STORIES[this.currentMonth]?.title || '';
-        document.getElementById('inputStoryContent').value = MONTH_STORIES[this.currentMonth]?.story || '';
+        document.getElementById('inputStoryTitle').value = this.monthStories[this.currentMonth]?.title || '';
+        document.getElementById('inputStoryContent').value = this.monthStories[this.currentMonth]?.story || '';
     }
 
     hideEditStoryModal() {
@@ -321,31 +639,75 @@ class CultureWall {
         const month = parseInt(document.getElementById('inputStoryMonth').value);
         const title = document.getElementById('inputStoryTitle').value.trim();
         const story = document.getElementById('inputStoryContent').value.trim();
-        MONTH_STORIES[month] = { title, story };
+
+        this.monthStories[month] = { title, story };
+        this.saveStories();
         this.hideEditStoryModal();
-        if (month === this.currentMonth) this.renderStory();
+        
+        if (month === this.currentMonth) {
+            this.renderStory();
+        }
+        
         this.showToast('故事已保存');
     }
 
     toggleFilter() {
-        this.filterMonth = this.filterMonth === null ? this.currentMonth : null;
+        if (this.filterMonth === null) {
+            this.filterMonth = this.currentMonth;
+        } else {
+            this.filterMonth = null;
+        }
         this.updateFilterText();
         this.renderAllMonths();
     }
 
     updateFilterText() {
         const filterText = document.getElementById('filterText');
-        filterText.textContent = this.filterMonth === null ? '筛选全部月份' : `仅显示${MONTH_NAMES[this.filterMonth - 1]}`;
+        if (this.filterMonth === null) {
+            filterText.textContent = '筛选全部月份';
+        } else {
+            filterText.textContent = `仅显示${MONTH_NAMES[this.filterMonth - 1]}`;
+        }
     }
 
     renderAllMonths() {
         const container = document.getElementById('allMonthsContent');
-        const months = this.filterMonth !== null ? [this.filterMonth] : Array.from({length: 12}, (_, i) => i + 1);
+        
+        if (this.filterMonth !== null) {
+            const monthEmployees = this.getEmployeesByMonth(this.filterMonth);
+            const story = this.monthStories[this.filterMonth];
+            
+            container.innerHTML = `
+                <div class="month-section">
+                    <h3 class="month-title">${MONTH_NAMES[this.filterMonth - 1]}</h3>
+                    ${story ? `<div class="month-story-preview">${story.title}：${story.story}</div>` : ''}
+                    <div class="employees-inline">
+                        ${monthEmployees.length === 0 
+                            ? '<p style="color: var(--text-secondary);">暂无员工</p>'
+                            : monthEmployees.map(emp => `
+                                <div class="employee-inline-card">
+                                    <div class="avatar">
+                                        ${emp.photo 
+                                            ? `<img src="${emp.photo}" alt="${emp.name}" onerror="this.parentElement.innerHTML='${emp.name.charAt(0)}'">` 
+                                            : emp.name.charAt(0)
+                                        }
+                                    </div>
+                                    <span class="name">${emp.name}</span>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                </div>
+            `;
+            return;
+        }
 
-        container.innerHTML = months.map(month => {
+        let html = '';
+        for (let month = 1; month <= 12; month++) {
             const monthEmployees = this.getEmployeesByMonth(month);
-            const story = MONTH_STORIES[month];
-            return `
+            const story = this.monthStories[month];
+            
+            html += `
                 <div class="month-section">
                     <h3 class="month-title">${MONTH_NAMES[month - 1]}</h3>
                     ${story ? `<div class="month-story-preview">${story.title}：${story.story}</div>` : ''}
@@ -361,18 +723,25 @@ class CultureWall {
                                         }
                                     </div>
                                     <span class="name">${emp.name}</span>
-                                </div>`).join('')
+                                </div>
+                            `).join('')
                         }
                     </div>
-                </div>`;
-        }).join('');
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
     }
 
     showToast(message) {
         const toast = document.getElementById('toast');
         document.getElementById('toastMessage').textContent = message;
         toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2500);
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 2500);
     }
 }
 
