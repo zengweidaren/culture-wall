@@ -46,7 +46,6 @@ body {
 .header {
     text-align: center;
     padding: 30px 0;
-    position: relative;
 }
 
 .header .title {
@@ -70,25 +69,6 @@ body {
 .header .subtitle {
     color: var(--text-secondary);
     font-size: 1.1rem;
-}
-
-.header-settings {
-    position: absolute;
-    top: 30px;
-    right: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 1.2rem;
-    transition: all 0.3s;
-}
-
-.header-settings:hover {
-    background: var(--primary);
 }
 
 .view-toggle {
@@ -143,76 +123,6 @@ body {
     background: var(--primary);
     border-color: var(--primary);
     color: white;
-}
-
-.section-upload {
-    margin-bottom: 30px;
-}
-
-.upload-area {
-    max-width: 400px;
-    margin: 0 auto;
-    padding: 40px;
-    border: 2px dashed var(--border);
-    border-radius: 16px;
-    background: var(--bg-card);
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.upload-area:hover,
-.upload-area.dragover {
-    border-color: var(--primary);
-    background: rgba(79, 70, 229, 0.1);
-}
-
-.upload-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    color: var(--text-secondary);
-}
-
-.upload-placeholder .icon {
-    font-size: 3rem;
-}
-
-.upload-placeholder .hint {
-    font-size: 0.85rem;
-    opacity: 0.7;
-}
-
-.upload-area img {
-    max-width: 100%;
-    max-height: 300px;
-    border-radius: 8px;
-}
-
-.upload-hint {
-    text-align: center;
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    margin-top: 15px;
-}
-
-.upload-status {
-    text-align: center;
-    margin-top: 15px;
-    padding: 10px;
-    border-radius: 8px;
-}
-
-.upload-status.uploading {
-    color: var(--warning);
-}
-
-.upload-status.success {
-    color: var(--secondary);
-}
-
-.upload-status.error {
-    color: var(--danger);
 }
 
 .section-gallery {
@@ -361,112 +271,6 @@ body {
 
 .btn-close:hover {
     background: var(--danger);
-}
-
-.modal-large {
-    max-width: 800px;
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px;
-    border-bottom: 1px solid var(--border);
-}
-
-.modal-header h3 {
-    font-size: 1.2rem;
-}
-
-.modal-body {
-    padding: 20px;
-}
-
-.modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    padding: 20px;
-    border-top: 1px solid var(--border);
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    color: var(--text-primary);
-    font-weight: 500;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-    width: 100%;
-    padding: 12px;
-    background: var(--bg-dark);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-primary);
-    font-size: 1rem;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: var(--primary);
-}
-
-.form-hint {
-    margin-top: 8px;
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-.token-status {
-    padding: 10px;
-    border-radius: 8px;
-    background: var(--bg-dark);
-}
-
-.token-ok {
-    color: var(--secondary);
-}
-
-.token-empty {
-    color: var(--danger);
-}
-
-.btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1rem;
-    transition: all 0.3s;
-}
-
-.btn-primary {
-    background: var(--primary);
-    color: white;
-}
-
-.btn-primary:hover {
-    background: var(--primary-dark);
-}
-
-.btn-secondary {
-    background: var(--bg-dark);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-}
-
-.btn-secondary:hover {
-    background: var(--border);
 }
 
 .btn-icon {
