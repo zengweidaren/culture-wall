@@ -125,22 +125,67 @@ class CultureWall {
     }
 
     async loadEmployeesFromGithub() {
+        const localKey = 'cultureWallEmployees';
         try {
+            if (!GITHUB_CONFIG.token) {
+                throw new Error('Token 未配置');
+            }
             const data = await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/data/employees.json?ref=${GITHUB_CONFIG.branch}`);
             const content = atob(data.content);
             this.employees = JSON.parse(content);
+            localStorage.setItem(localKey, JSON.stringify(this.employees));
             return;
         } catch (error) {
-            console.log('员工数据文件不存在或加载失败，使用空数据');
+            console.log('从 GitHub 加载失败，尝试从本地存储加载:', error.message);
+            const localData = localStorage.getItem(localKey);
+            if (localData) {
+                try {
+                    this.employees = JSON.parse(localData);
+                    console.log('已从本地存储恢复数据');
+                    return;
+                } catch (e) {
+                    console.log('本地存储数据解析失败');
+                }
+            }
         }
         this.employees = {};
     }
 
-    async saveEmployeesToGithub() {
+async saveEmployeesToGithub() {
+        localStorage.setItem('cultureWallEmployees', JSON.stringify(this.employees));
+
         if (!GITHUB_CONFIG.token) {
-            console.warn('Token 未配置，无法保存到 GitHub');
+            console.warn('Token 未配置，仅保存在本地存储');
             return false;
         }
+
+        try {
+            const content = JSON.stringify(this.employees, null, 2);
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            const path = 'data/employees.json';
+            const sha = await this.getFileSha(path);
+            
+            const body = {
+                message: 'Update employees data',
+                content: base64Content,
+                branch: GITHUB_CONFIG.branch
+            };
+            
+            if (sha) {
+                body.sha = sha;
+            }
+
+            await this.githubApi(`/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
+                method: 'PUT',
+                body: JSON.stringify(body)
+            });
+
+            return true;
+        } catch (error) {
+            console.error('保存到 GitHub 失败，数据已保存在本地:', error);
+            return false;
+        }
+    }
 
         try {
             const content = JSON.stringify(this.employees, null, 2);
